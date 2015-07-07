@@ -1,0 +1,17 @@
+<launch>    
+    <rosparam file="$(find homography_calc)/param/vidfeed.yaml" command="load" />
+
+	<param name="imageSaveDirs" command="$(find homography_calc)/scripts/directories.bash"/>
+	<!-- Launch the nodes --> 
+    
+    <node pkg="webcam_pub" type="video" name ="Video_feed">  </node>
+    <node pkg="homography_calc" type="findAndMatch" name ="pointsFindHomest" launch-prefix="gnome-terminal -e" output="screen">  </node>
+    <node pkg="homography_calc" type="homestHomog" name ="homogHomestFind" output="screen" >  </node>
+    
+    <!--param name="resetTopic" value="reset2" />
+    <param name="matchedPointsTopic" value="matchedPoints2" />
+    
+    <node pkg="homography_calc" type="findAndMatch" name ="pointsFindCV">  </node>
+    <node pkg="homography_calc" type="cvHomog" name ="cvHomestFind" output="screen" launch-prefix="gnome-terminal -e">  </node-->
+    <!-- output="screen" launch-prefix="gnome-terminal -e" -->
+</launch>

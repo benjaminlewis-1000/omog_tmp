@@ -1,0 +1,14 @@
+<launch>
+    <rosparam file="$(find homography_calc)/param/simulation.yaml" command="load" />
+	
+	<!-- Backup and clear directory if it hasn't been done already. -->
+	<param name="backupAndClearDir" command="$(find homography_calc)/scripts/saveKeyframes.sh" />
+	<!-- Ensure that the image save directories exist. -->
+	<param name="imageSaveDirs" command="$(find homography_calc)/scripts/directories.sh"/>
+	<!-- Launch the nodes --> 
+	
+    <node pkg="homography_calc" type="findAndMatch" name ="pointsFind">  </node>
+    <node pkg="homography_calc" type="homestHomog" name ="homestHom">  </node>
+    
+    <!-- No need to save the images and stuff...->
+</launch>

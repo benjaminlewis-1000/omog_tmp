@@ -1,0 +1,507 @@
+// Find homography using OpenCV packages
+#include <opencv2/opencv.hpp>
+#include <opencv2/nonfree/nonfree.hpp>
+#include <Eigen/Dense>
+
+#include <vector>
+
+#include "ros/ros.h"
+#include <math.h>
+#include <algorithm>
+#include <cv_bridge/cv_bridge.h>
+#include <image_transport/image_transport.h>
+#include <homography_calc/matchedPoints.h>
+#include <homography_calc/features.h>
+#include <std_msgs/Bool.h>
+#include <std_msgs/Float64MultiArray.h>
+
+#include "../include/database.h"
+
+#if defined (__cplusplus)
+extern "C"{
+#endif
+	#include "../include/ESMlibrary.h"  
+	// Prevent name mangling, which happens when you link
+	// a C library into a C++ program.
+#if defined (__cplusplus)
+}
+#endif
+
+#define SURF 1
+#define IN true
+#define OUT false
+
+
+void DrawLine (imageStruct *image, int r1, int c1, int r2, int c2);
+void DrawResult (int sx, int sy, float H[9], imageStruct I);
+
+class intensityHomographyFilter
+{
+public:
+
+/******************************************************************
+***********  Initialization function for class  *******************
+******************************************************************/
+
+	intensityHomographyFilter()	{
+	// Start topic, sends a signal to the system so that it begins to navigate. 
+		std::string startTopic;
+		if (ros::param::has("startTopic") ){
+			ros::param::get("startTopic", startTopic);
+		}else{
+			ROS_ERROR("No start topic defined");
+			exit(1);
+		}
+	// Topic which provides the video feed from the camera.
+		std::string videoTopic;
+		if (ros::param::has("videoFeed") ){
+			ros::param::get("videoFeed", videoTopic);
+		}else{
+			videoTopic = "recorded";
+		}
+	
+	// Database name for the ESM Filter, where keyframes are stored.
+	// Default is ESM_KEYFRAMES. 
+		std::string ESMFilterDB;
+		if (ros::param::has("ESMFilterDB") ){
+			ros::param::get("ESMFilterDB", ESMFilterDB);
+		}else{
+			ROS_WARN("ESMFilterDB is not set.");
+			ESMFilterDB = "ESM_KEYFRAMES";
+		}
+		
+		db = new keyframeDatabase(ESMFilterDB);
+	
+	// Directory where the keyframes are saved for the current run.
+	// Mandatory parameter, since it is system dependent.  
+		if (ros::param::has("imgSaveDir") ){
+			ros::param::get("imgSaveDir", imgSaveDir);
+		}else{
+			ROS_ERROR("imgSaveDir is not set.");
+			exit(1);
+		}
+		
+	// Publish topic for the homography from the ESM filter. 
+		std::string homogTopic;
+		if (ros::param::has("homogTopic") ){
+			ros::param::get("homogTopic", homogTopic);
+		}else{
+			homogTopic = "filterHomog";
+		}
+		
+	// Threshold for the ZNCC. Below this threshold, the system will pick another 
+	// keyframe for the outbound flight. 
+		if (ros::param::has("ZNCC_out_thresh") ){
+			ros::param::get("ZNCC_out_thresh", ZNCC_outThresh);
+		}else{
+			ROS_ERROR("ZNCC Out Threshold parameter is required");
+			exit(1);
+		}
+	
+	// ZNCC threshold for inbound flight. Operating under the assumption that 
+	// we are navigating in a manner to get into the same position where the 
+	// original keyframe was taken, the ZNCC parameter should be increasing as we 
+	// get closer and closer to the keyframe. When we are above this threshold 
+	// (which is TBD,) then the next keyframe to navigate to will be loaded
+	// from the database. 
+		if (ros::param::has("ZNCC_in_thresh") ){
+			ros::param::get("ZNCC_in_thresh", ZNCC_inThresh);
+		}else{
+			ROS_ERROR("ZNCC In Threshold parameter is required");
+			exit(1);
+		}
+		
+	// A navigation topic, which tells us whether we should still be going out or 
+	// trying to navigate back to the origin. 
+		std::string directionChangeTopic;
+		if (ros::param::has("directionChangeTopic") ){
+			ros::param::get("directionChangeTopic", directionChangeTopic);
+		}else{
+			directionChangeTopic = "navChange";
+		}
+		
+ 		/*** From the ESM example ***/ 
+		// The tracking parameters
+		// miter: the number of iterations of the ESM algorithm (>= 1);
+		// mprec: the precision of the ESM algorithm (1..10)
+		// low precision = 1, high precision = 10;
+		// miter and mprec should be chosen depending on the available 
+		// computation time; 
+		// For low-speed PCs or high video framerate choose low miter and low mprec.	
+			
+		// X and Y size of the image (Columns and rows)	
+		if (ros::param::has("cameraSizeX") ){
+			ros::param::get("cameraSizeX", image_sizex);
+		}else{
+			ROS_ERROR("Image size x (param cameraSizeX) not set");
+			exit(1);
+		}
+		
+		if (ros::param::has("cameraSizeY") ){
+			ros::param::get("cameraSizeY", image_sizey);
+		}else{
+			ROS_ERROR("Image size y (param cameraSizeY) not set");
+			exit(1);
+		}
+			
+		// Number of iterations the filter runs. 	
+		if (ros::param::has("miter") ){
+			ros::param::get("miter", miter);
+		}else{
+			miter = 3;
+		}
+		
+		// Speedup tradeoff for mprec, where a higher number in this param gives faster computation, less accuracy. 
+		int mprec_diff;		
+		if (ros::param::has("mprec_diff") ){
+			ros::param::get("mprec_diff", mprec_diff);
+		}else{
+			mprec_diff = 2;
+		}
+		
+		
+	// Set up subscribers, publishers, and callbacks. 
+		
+		directionSub = n.subscribe(directionChangeTopic, 1, &intensityHomographyFilter::switchNavDirection, this);
+		
+		startSub = n.subscribe(startTopic, 1, &intensityHomographyFilter::start, this);
+
+		//Topic to which you want to subscribe
+		imageSub = n.subscribe(videoTopic, 1, &intensityHomographyFilter::filter, this);
+		
+		homogPub = n.advertise<std_msgs::Float64MultiArray>(homogTopic, 1);
+		
+		// Initialize constants. Start is default off, we are on our 0th keyframe, we want to get a 
+		// new keyframe as soon as navigation starts, and we start by navigating OUT. 
+		
+		startFlag = false; // Actually has a different function than in other nodes. 
+		keyframeNum = 0;
+		newKeyframe = true;
+		navigationDirection = OUT;
+		// Computation of max value of mprec, minus the speedup factor. Minimum value is 1.
+		mprec = floor(log2(std::min(image_sizex, image_sizey)/25) + 1) - mprec_diff;	
+		mprec = std::max(mprec, 1);
+		posx = 0;
+		posy = 0;
+	}
+	
+	void start(const std_msgs::Bool msg){
+		if (msg.data == true){
+			startFlag = true;
+		}
+	}
+	
+	void switchNavDirection(const std_msgs::Bool msg){
+		if (msg.data == true){
+			navigationDirection = !navigationDirection;
+			ROS_INFO("Switched navigation direction in matchRawFeatures");
+		}
+	}
+	
+	// Pretty sure we *don't* need this callback. 
+	
+	/*void resetKeyframe(const std_msgs::Bool msg){
+		if (msg.data == true){
+			ROS_INFO("Keyframe Reset");
+			
+			if (navigationDirection == OUT){
+					
+				imageAccessMutex.lock();
+					keyframe = image; // Should be pulling in the latest received keyframe. 
+				imageAccessMutex.unlock();
+				
+				raw_kps_keyframe.erase(raw_kps_keyframe.begin(), raw_kps_keyframe.end() ); //
+				detector.detect(keyframe, raw_kps_keyframe);  //  
+				extractor.compute(keyframe, raw_kps_keyframe, descriptors_keyframe);  //
+			
+				// If going out... 
+				char buf[80];  
+		 		keyframeStack.push_back(keyframeNum);
+		 		sprintf(buf, "%s/findMatchImages/IM%05d.jpg", imgSaveDir.c_str(), keyframeNum++);
+		 		std::string fileLocation = buf;
+		 		imwrite(fileLocation, image);
+		 		db->addKeyframe(raw_kps_keyframe, fileLocation, descriptors_keyframe);
+			
+				exit; // If we have a keyframe, we know the homography is identity (should be)
+			}else{ // Navigating out. 
+				ROS_ERROR("You need to rewrite this for the ESM homography filter, you ninny!");
+				// For this, we shouldn't have to retrieve the image because 
+				// we have the key points already. 
+			}			
+		}
+	}  */
+	
+/******************************************************************
+*************  Homography Calculation Callback  *******************
+******************************************************************/
+
+	void filter(const sensor_msgs::Image::ConstPtr& msg)
+	{
+		// Nothing should happen until the startFlag has been set.
+		// Once it is set, it should keep going indefinitely.
+		// (In other words, don't set startFlag to 'false' in this code. 
+		if (startFlag){
+		
+			// Get the image. Convert it to grayscale, since that is the
+			// format necessary for the ESM homography filter. Stuff 
+			// the image into an imageStruct (I reverse engineered that). 
+			
+			cv_bridge::CvImagePtr cv_ptr;
+			cv_ptr = cv_bridge::toCvCopy(msg, "bgr8");
+ 
+			image = cv::Mat(cv_ptr->image);
+			cv::cvtColor(image, image, CV_BGR2GRAY);
+			 	
+		 	imageStruct I;
+		 	MallImage(&I, image.cols, image.rows);
+		 	
+		 	// Populate the image structure for use with the homography filter. 
+		 	for (int i = 0; i < image.rows; i++){  // Across image
+		 		for (int j = 0; j < image.cols; j++){ // Down image
+		 			I.data[i*image.cols + j] = image.at<uchar>(i,j);
+		 		}
+		 	}
+		 	
+		 	if (newKeyframe){
+		 	
+		 		// Save off the keyframe, or read it from the database,
+		 		// depending on the direction you happen to be travelling.
+		 		
+		 		newKeyframe = false; // Turn off the flag. 
+		 		
+		 		if (navigationDirection == OUT){ // Write to database. 
+			 		std::vector<cv::KeyPoint> nada;
+			 		char buf[80];
+			 		keyframeStack.push_back(keyframeNum);
+			 		sprintf(buf, "%s/ESMkeyframes/IM%05d.pgm", imgSaveDir.c_str(), keyframeNum++);
+			 		std::string fileLocation = buf;
+			 		cv::Mat nothing = cv::Mat::zeros(1,1,CV_32FC1);
+			 		// Really only saving off the image and its file location here. 
+			 		// However, I need dummy fields to populate the database correctly, since
+			 		// I don't want to make a different database accessor function. 
+			 		// It would take more time than it's worth, so I justify the slight
+			 		// sloppiness here. 
+			 		imwrite(fileLocation, image);
+			 		db->addKeyframe(nada, fileLocation, nothing);
+			 	
+		 		}else{ // Nav direction is in, read from database. 
+		 		// Again, dummy variables to read in, plus the file location. 
+		 			std::string fileLocation;
+		 			cv::Mat nothing;
+			 		std::vector<cv::KeyPoint> nada;
+			 		int kid; 
+			 		keyframeStack.pop_back();
+					bool success = db->getKeyframe(kid, nada, 
+							fileLocation, nothing);
+					if (success){
+						// If we read from the database successfully *AND* we 
+						// read the image back from the database into I, then go on. 
+						if (ReadPgm((char*) fileLocation.c_str(), &I) ){
+							ROS_ERROR("It seems that reading the PGM failed.");
+						}
+					}
+		 		}
+		 		
+		 		// TODO: Have these parameters in the ROS params. (miter, mprec_diff, img_x_size, img_ysize)
+		 	
+				
+
+			// Form the tracking structure with the latest keyframe. 
+				if (MallTrack (&T, &I, posx, posy, sizx, sizy, miter, mprec)){
+					ROS_ERROR("Tracking structure in ESM is not properly formed");
+					exit(1);
+				}else{
+				//	printf ("ESM Tracking structure ready\n");
+				}
+			}else{
+		
+				// Perform the tracking
+				if (MakeTrack (&T, &I)){
+					ROS_ERROR("Something is wrong with the tracking.");
+					exit (1);
+				}
+			
+				// Draw a black window around the pattern
+				// T.homog contains the pointer to the homography matrix
+				DrawResult (sizx, sizy, T.homog, I);   
+		
+				Eigen::Matrix3d H;
+				H << T.homog[0], T.homog[1], T.homog[2], 
+					 T.homog[3], T.homog[4], T.homog[5], 
+					 T.homog[6], T.homog[7], T.homog[8];
+					 
+				std_msgs::Float64MultiArray hMsg;
+				for (int i = 0; i < 9; i++){
+					hMsg.data.push_back(T.homog[i]);
+				}
+					 
+				homogPub.publish(hMsg);
+					 
+					// Save the the current image 
+	
+				float res = GetZNCC(&T);
+				
+			// Theoretically, we should be able to have a threshold on the way out 
+			// under which we know that the homography is becoming ill-conditioned.
+			// We should have one on the way back where we know that we are almost on 
+			// top of the original keyframe. Preliminary tests, however, are making 
+			// it hard for me to determine a good trheshold for determining a match. 
+			
+				if (navigationDirection == OUT){
+					if (res < ZNCC_outThresh){
+						ROS_INFO("Threshold met for new keyframe on outbound flight.\
+							ZNCC is %g", res );
+						//printf("ZNCC is %g\n", res);
+						newKeyframe = true;
+					
+		 	/*	sprintf(buf, "%s/findOnlyImages/IM%05d.jpg", imgSaveDir.c_str(), keyframeNum++);
+		 		std::string fileLocation = buf;
+		 		imwrite(fileLocation, image);
+		 		db->addKeyframe(raw_kps_keyframe, fileLocation, descriptors_keyframe);
+					
+				*/		
+					}
+				}else{
+					if (res > ZNCC_inThresh){
+					// Think about: What happens at that turn-around point? It should just 
+					// keep the last keyframe in memory, which I think it does do, in fact. 
+					// Then it navigates to that one until it meets this theshold, when 
+					// we can start navigating to the previous keyframe. 
+						ROS_INFO("Threshold met for matching keyframe on inbound flight. \
+							ZNCC is %g", res );
+						newKeyframe = true;
+					
+					}
+				}
+	
+				/*char filename[50];
+				sprintf (filename, "./res/im%03d%03g.pgm", j, res);
+				if (SavePgm (filename, &I)){
+				 	ROS_ERROR("Can't save current image");
+				  	exit (1);
+				 }
+				 
+				// Save the reprojection of the current pattern
+				sprintf (filename, "./res/patc%03d%03g.pgm", j++, res);
+				if (SavePgm (filename, GetPatc (&T))){
+					ROS_ERROR("Can't save reprojection image");
+					exit (1);
+				}*/
+			}	
+		}
+	}
+		
+
+/******************************************************************
+**************  Private Functions  ********************************
+******************************************************************/
+private:
+	ros::NodeHandle n; 
+	ros::Publisher homogPub;
+	ros::Subscriber startSub;
+	ros::Subscriber imageSub;
+	ros::Subscriber directionSub;
+	
+	keyframeDatabase* db;
+	
+	cv::Mat image;
+	
+	Mutex imageAccessMutex;
+	
+	// Parameters for the ESM filter. 
+	int image_sizex;
+	int image_sizey;
+	int miter; 
+	int mprec;
+	int posx;
+	int posy;				
+	
+	bool startFlag;
+	trackStruct T; 
+	int sizx, sizy;
+	double ZNCC_outThresh;
+	double ZNCC_inThresh;
+	bool newKeyframe;
+	int keyframeNum;
+	std::vector<int> keyframeStack; // Keep a record of the keyframes we push on and take off.
+	std::string imgSaveDir;
+	int navigationDirection;
+
+
+};//End of class
+
+int main(int argc, char **argv)
+{
+  //Initiate ROS
+  ros::init(argc, argv, "intensityHomographyEstimator");
+
+  //Create an object of class SubscribeAndPublish that will take care of everything
+  intensityHomographyFilter IHFObject;
+
+  ros::spin();
+
+  return 0;
+}
+
+
+void DrawLine (imageStruct *image, int r1, int c1, int r2, int c2)
+{
+  int dr, dc, temp;
+  int cols = image->cols, rows = image->rows;
+  int i, point, area;
+  
+  area = cols * rows;
+  if (r1 == r2 && c1 == c2) 
+    return;
+  if (abs (r2 - r1) < abs (c2 - c1)) {
+    if (c1 > c2) {
+      temp = r1; r1 = r2; r2 = temp;
+      temp = c1; c1 = c2; c2 = temp;
+    }
+    dr = r2 - r1;
+    dc = c2 - c1;
+    temp = (r1 - c1 * dr / dc)*cols;
+    for (i = c1; i <= c2; i++) {
+      point = temp + (i * dr) / dc * cols  + i;
+      if ((point >= 0) & (point < area))  
+	image->data[point] = 0.0;
+    }
+  } 
+  else {
+    if (r1 > r2) {
+      temp = r1; r1 = r2; r2 = temp;
+      temp = c1; c1 = c2; c2 = temp;
+    }
+    dr = r2 - r1;
+    dc = c2 - c1;
+    temp =  c1 - r1 * dc / dr;
+    for (i = r1; i <= r2; i++) {
+      point = temp + i*cols + (i * dc) / dr;
+      if ((point >= 0) & (point < area))  
+	image->data[point] = 0.0;
+    }
+  }
+
+  return;
+}
+
+void DrawResult (int sx, int sy, float H[9], imageStruct I) 
+{
+  int i;
+  float pEnd[8], pIni[8];
+
+  pIni[0] = 0;    pIni[1] = 0;      pIni[2] = sx - 1; pIni[3] = 0;
+  pIni[4] = sx-1; pIni[5] = sy - 1; pIni[6] = 0;      pIni[7] = sy - 1;
+  for (i = 0; i < 4; i++) {
+    pEnd[2*i] = (H[0]*pIni[2*i] + H[1]*pIni[2*i+1] + H[2])/
+      (H[6]*pIni[2*i] + H[7]*pIni[2*i+1] + H[8]); 
+    pEnd[2*i+1] = (H[3]*pIni[2*i] + H[4]*pIni[2*i+1] + H[5])/
+      (H[6]*pIni[2*i] + H[7]*pIni[2*i+1] + H[8]);      
+  }
+  DrawLine (&I, (int)pEnd[1], (int)pEnd[0], (int)pEnd[3], (int)pEnd[2]);
+  DrawLine (&I, (int)pEnd[3], (int)pEnd[2], (int)pEnd[5], (int)pEnd[4]);
+  DrawLine (&I, (int)pEnd[5], (int)pEnd[4], (int)pEnd[7], (int)pEnd[6]);
+  DrawLine (&I, (int)pEnd[7], (int)pEnd[6], (int)pEnd[1], (int)pEnd[0]);
+
+  return;
+}

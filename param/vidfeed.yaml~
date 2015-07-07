@@ -1,0 +1,16 @@
+SURF_hessian: 40
+SIFT_hessian: 200
+image_rotation_angle: 0.0
+featureDistance: 1.7
+minDistMult: 3.0
+fundMatP1: 2.0
+fundMatP2: 0.99
+keyframeResetThresh: 25.0
+videoFile: "/home/benjamin/Research/Code/homography_test/test1.mkv"
+homogTopic: "homography"
+resetTopic: "keyframeReset"
+videoFeed: "recorded"
+viewerFeed: "recorded"
+matchedPointsTopic: "matchedPoints"
+homogControlTopic: "homogControlLaw"
+imgSaveDir: "home/benjamin/catkin_ws/src/savedImages"

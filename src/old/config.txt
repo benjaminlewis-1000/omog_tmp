@@ -1,0 +1,30 @@
+homography:
+{ 
+	/* If it's a double, the .0 at the end turns out to be pretty important. */
+	featureThresh = 40;
+	default_frames_pass = 160;
+	videoName = "test1.mkv";
+	debugFile = "out.txt";
+	rotateFrameDeg = 0.0;
+	featureDistance = 1.7;
+	minDistMult = 3.0; /* Minimum distance max multiplier for matcher, 3.0 is good. */
+	reprojectionErrorMax = 25.0;
+	fundMatParam1 = 2.0;
+	fundMatParam2 = 0.99;
+};
+K:  /* Camera matrix for GoPro RRANSAC-1 */
+{
+	k11 = 655.946;
+	k12 = 0.0;
+	k13 = 655.2145;
+	k21 = 0.0;
+	k22 = 658.3473;
+	k23 = 472.478;
+	k31 = 0.0;
+	k32 = 0.0;
+	k33 = 1.0;
+};
+D:
+{
+
+};

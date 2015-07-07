@@ -1,0 +1,42 @@
+TODO
+
++Homography decomposition
++Homog control law
++List out all the different parameters
++List nodes and interconnections
++publish homography and center of points in a custom message for control law
++Make the homography filter into a node
++Saving off keyframes
++Test getting data back out (I think I did this already)
++Script to clear database stuff
++Ensure that everything compiles modularly
++See if the save directory exists before saving to it. (ROSLAUNCH script)
++Send a resetKeyframe (now start) to the findFeatures/ESMFilter nodes. 
+	-- This will function as a sort of "Start navigation" signal.
+	-- Script: start.pl
+
+-Test ROS code
+	-Satisfied with basic DB functionality
+	-A lot should be done once the simulator works.
+-Hook in the simulator (Waiting on Mathworks)
+
+-How to launch multiple copies of one node
+-Make a few roslaunch files
+-Launch script in roslaunch
+-Homography filter (rather, filter the control law inputs).
+-Figure out how to bring in previous keyframes for navigation
+	*Perhaps have a completely separate keyframe publisher? Benefits - it's easy to publish new keyframes or old keyframes. 
+-Test the homography filter (find out how it works)
+-Homography and sensor fusion filter
+-Address the delay in setting a new keyframe. (Maybe an issue?) 
+-Comment code
+-Optical flow node (for direction?) 
+-Figure out rotation values
+-Figure out fusing multiple homographies
+-Test in ESMFilter if we can find when we're back using ZNCC
+
+CREATE ROLE benjamin LOGIN CREATEDB CREATEROLE PASSWORD 'hex'
+
+%%% Simulator TODO %%%
+- Write back the old keyframe for use in navigation.
+- Good time to use previous keyframe

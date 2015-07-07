@@ -1,0 +1,3 @@
+geometry_msgs/Vector3 currentCenterOfMass
+geometry_msgs/Vector3 targetCenterOfMass
+std_msgs/Float64MultiArray homography

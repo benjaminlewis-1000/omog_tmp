@@ -1,0 +1,80 @@
+Node: webcam_pub/videoStream.cpp
+	Description: Publish a video stream from a file
+	Publish to: 
+		- webcam_pub/viewer.cpp
+		- findFeaturesAndMatch.cpp
+		- findFeatures.cpp
+		
+Node: webcam_pub/webcam.cpp
+	Description: Publish from a webcam
+	Publish to: 
+		- webcam_pub/viewer.cpp
+		- findFeaturesAndMatch.cpp
+		- findFeatures.cpp
+		
+Node: cvHomog.cpp
+	Description: Find the homography from matched points, using OpenCV's findHomography
+	Subscribe to:
+		- findFeaturesAndMatch.cpp
+		- matchRawFeatures.cpp
+	Publish to:
+		- findFeatures.cpp
+		- findFeaturesAndMatch.cpp
+		- homogDecompose.cpp
+		- homogControlLaw.cpp
+		
+Node: homestHomog.cpp
+	Description: Find the homography from matched points, using homest library
+	Subscribe to:
+		- findFeaturesAndMatch.cpp
+		- matchRawFeatures.cpp
+	Publish to:
+		- findFeatures.cpp
+		- findFeaturesAndMatch.cpp
+		- homogDecompose.cpp
+		- homogControlLaw.cpp
+		
+Node: findFeaturesAndMatch.cpp
+	Description: Does the job of both findFeatures and matchRawFeatures. 
+	Subscribe to: 
+		- webcam_pub/webcam.cpp
+		- webcam_pub/videoStream.cpp
+	Publish to:
+		- cvHomog.cpp
+		- homestHomog.cpp
+		
+Node: findFeatures.cpp
+	Description: Finds raw, unmatched feature points from a pair of images and publishes them to a node where they are matched.  
+	Subscribe to: 
+		- webcam_pub/webcam.cpp
+		- webcam_pub/videoStream.cpp
+	Publish to:
+		- matchRawFeatures.cpp
+			
+Node: matchRawFeatures.cpp
+	Description: Match raw feature points and publish them to a homography finding node.  
+	Subscribe to: 
+		- webcam_pub/webcam.cpp
+		- webcam_pub/videoStream.cpp
+	Publish to:
+		- cvHomog.cpp
+		- homestHomog.cpp
+		
+Node: homogDecompose.cpp
+	Description: Decompose a homography as given in "A deeper understanding of the homography"
+	Subscribe to:
+		- findFeaturesAndMatch.cpp
+		- matchRawFeatures.cpp
+	Publish to:
+		- TBD (Kalman filter)
+		
+Node: homogControlLaw.cpp
+	Description: Control law based on the raw homography, as described in the paper "Homography-based 2d visual tracking and servoing."
+	Subscribe to:
+		- cvHomog.cpp
+		- homestHomog.cpp
+	Publish to:
+		- TBD (Kalman filter)
+		
+Node: ESMHomographyFilter.cpp
+	Description: Use the ESM homography filter to estimate the homography. Reset values are self-contained. 

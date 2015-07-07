@@ -1,0 +1,16 @@
+SURF_hessian: 40
+SIFT_hessian: 200
+image_rotation_angle: 0.0
+featureDistance: 1.7
+minDistMult: 3.0
+fundMatP1: 2.0
+fundMatP2: 0.99
+
+keyframeResetThresh: 25.0
+homogTopic: "simulationHomog"
+resetTopic: "keyframeReset"
+videoFeed: "simulationVid"
+viewerFeed: "simulationVid"
+imgSaveDir: "home/benjamin/catkin_ws/src/savedImages"
+matchedPointsTopic: "matchedPoints"
+homogControlInputTopic: "homestHomogControl"

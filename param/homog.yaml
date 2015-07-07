@@ -1,0 +1,10 @@
+SURF_hessian: 50
+SIFT_hessian: 200
+image_rotation_angle: 0.0
+featureDistance: 1.7
+minDistMult: 3.0
+fundMatP1: 2.0
+fundMatP2: 0.99
+keyframeResetThresh: 25.0
+cameraCalibrationVals: [655.946, 0, 655.2145, 0, 658.3473, 472.478, 0, 0, 1]  # List
+imgSaveDir: "home/benjamin/catkin_ws/src/savedImages"

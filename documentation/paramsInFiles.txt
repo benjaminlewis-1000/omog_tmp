@@ -1,0 +1,80 @@
+cvHomog.cpp
+	Sub:
+		matchedPointsTopic
+		keyframeResetThresh
+		directionChangeTopic
+	Pub:
+		homogTopic
+		resetTopic
+		homogControlInputTopic
+		
+ESMHomographyFilter.cpp
+	Sub:
+		ZNCC_thresh
+		imgSaveDir
+		ESMFilterDB
+		videoFeed
+		startTopic
+		directionChangeTopic
+		miter
+		mprec_diff
+		cameraSizeX
+		cameraSizeY
+	Pub:
+		homogTopic
+		resetTopic (does not actually use)
+	
+findFeaturesAndMatch.cpp
+	Sub:
+		SURF_hessian
+		videoFead
+		findMatchDB
+		imgSaveDir
+		resetTopic
+		startTopic
+		directionChangeTopic
+	Pub:
+		matchedPointsTopic
+	
+findFeatures.cpp
+	Sub:
+		SURF_hessian
+		SIFT_hessian
+		videoFeed
+		imgSaveDir
+		findDB
+		resetTopic
+		startTopic
+		directionChangeTopic
+	Pub:
+		rawKeypointsTopic
+		
+homestHomog.cpp
+	Sub:
+		matchedPointsTopic
+		keyframeResetThresh
+		directionChangeTopic
+	Pub:
+		resetTopic
+		homogTopic
+		homogControlInputTopic
+		
+homogControlLaw.cpp
+	Sub:
+		homogControlInputTopic
+		directionChangeTopic
+	Pub:
+		controlLawOutTopic
+		
+homogDecompose.cpp
+	Sub:
+		homogTopic
+	Pub:
+		decompositionPubTopic
+	
+matchRawFeatures.cpp
+	Sub:
+		rawKeypointsTopic
+		directionChangeTopic
+	Pub:
+		matchedPointsTopic

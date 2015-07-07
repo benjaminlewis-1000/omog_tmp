@@ -1,0 +1,179 @@
+matchedPointsTopic - topic to subscribe to matched feature points from a keyframe and a moving frame.
+	Type: homography_calc/matchedPoints
+	Subscribed to in:
+		cvHomog.cpp
+		homestHomog.cpp
+	Published in:
+		findFeaturesAndMatch.cpp
+		matchRawFeatures.cpp
+
+homogTopic - Topic that carries a serialized homography array (9 doubles). Should be populated by going across rows. 
+	Type: Float64MultiArray
+	Subscribed to in: 
+		homogDecompose.cpp
+	Published in:
+		cvHomog.cpp
+		homestHomog.cpp
+		ESMHomographyFilter.cpp
+		
+resetTopic - Topic to set a new key frame. 
+	Type: std_msgs/Bool
+	Subscribed to in:
+		findFeaturesAndMatch.cpp
+		findFeatures.cpp
+		ESMHomographyFilter.cpp
+	Published in:
+		homestHomog.cpp
+		cvHomog.cpp
+		
+homogControlInputTopic - Topic to publish from a homography calculation to the homography control law. Contains homography and weighted centers of points.
+	Type: homography_calc/controlLawInputs
+	Subscribed to in:
+		homogControlLaw.cpp
+	Published in:
+		cvHomog.cpp
+		homestHomog.cpp
+		
+SURF_hessian - SURF threshhold level for feature detection. Lower numbers are a more rigorous feature detection. Default value should be about 40ish.
+	Type: double
+	Subscribed to in: 
+		findFeaturesAndMatch.cpp
+		findFeatures.cpp
+		speedup.cpp
+	Published in:
+		<N/A>
+		
+SIFT_hessian: Same idea as SURF_hessian, but it is not expected to be used. 
+		
+videoFeed - Source of the video feed to the homography calculation. 
+	Type: sensor_msgs/Image
+	Subscribed to in:
+		findFeaturesAndMatch.cpp
+		old_homog.cpp <DEPRECATED>
+		findFeatures.cpp
+		ESMHomographyFilter.cpp
+	Published in:
+		-- "recorded" in webcam_pub/videoStream.cpp
+		-- "camera" in webcam_pub/webcam.cpp
+		
+rawKeypointsTopic - A feed of raw keypoints from the extractor.
+	Type: homography_calc/features
+	Subscribed to in:
+		matchRawFeatures.cpp
+	Published in : 		
+		findFeatures.cpp
+		
+cameraCalibrationVals - array of camera calibration (K) values. Required. Read in across the rows of the matrix.
+	Type: double[]
+	Used in: 
+		homogControlLaw.cpp
+		homogDecompose.cpp
+		
+controlLawOutTopic - Output of the homography control law that uses the homography directly.
+	Type: homography_calc/controlLawOutputs
+	Subscribed to in: 
+		<TODO>
+	Published in:
+		homogControlLaw.cpp
+		
+decompositionPubTopic - Publish the values of the homography decomposition, T and R angles for decompositions (a) and (b). 
+	Type: homography_calc/decomposition
+	Subscribed to in:
+		<TODO>
+	Published in:
+		homogDecompose.cpp
+		
+videoFile - File which the video node will play.
+	Type: string (filename)
+	Subscribed to in: 
+		webcam_pub/videoStream.cpp
+		
+ZNCC_out_thresh - threshold value for the ESM homography filter, under which a new keyframe should be defined (on outbound flight)
+	Type: double
+	Subscribed to in: 
+		ESMHomographyFilter.cpp
+		
+ZNCC_in_thresh - threshold value for the ESM homography filter, under which a new keyframe should be defined (on inbound flight)
+	Type: double
+	Subscribed to in: 
+		ESMHomographyFilter.cpp
+		
+keyframeResetThresh - Threshold over which the keyframe should be reset in the homography calculation. It is calculated from the reprojection error.
+	Type: double
+	Subscribed to in:
+		homestHomog.cpp
+		cvHomog.cpp
+		
+startTopic - A topic that is issued once to start the system navigation. Should be sent by start.pl.
+	Type: string
+	Subscribed to in:
+		ESMHomographyFilter.cpp
+		findFeatures.cpp
+		findFeaturesAndMatch.cpp
+		
+directionChangeTopic - Signal to change direction and start navigating back.
+	Type: string / topic name
+	Subscribed to in:
+		findFeatures.cpp
+		findFeaturesAndMatch.cpp
+		ESMHomographyFilter.cpp
+		homestHomog.cpp
+		cvHomog.cpp
+		homogControlLaw.cpp
+		matchRawFeatures.cpp
+		
+###### Parameters for ESM filter.     ######
+
+cameraSizeX - number of columns in the image. Required.
+	Type: int
+	Subscribed to in:
+		ESMHomographyFilter.cpp
+
+cameraSizeY - number of rows in the image. Required.
+	Type: int
+	Subscribed to in:
+		ESMHomographyFilter.cpp
+		
+miter - number of iterations the homography filter runs. Higher numer is more accurate but slower computationally.
+	Type: int
+	Subscribed to in:
+		ESMHomographyFilter.cpp	
+				
+mprec_diff - Number to subtract from the max mprec calculated in ESM filter. This is essentially a speedup factor; again, faster computation, less accuracy. 
+	Type: int
+	Subscribed to in:
+		ESMHomographyFilter.cpp	
+		
+###### Database names and variables.  ######
+dbUsername - Username for database. Default should be 'benjamin'.
+	Type: string
+	Subscribed to in:
+		database.h
+		
+dbPassword - Password for database. Default should be 'hex'.
+	Type: string
+	Subscribed to in:
+		database.h
+		
+findMatchDB - Name for database used in findFeaturesAndMatch.cpp, default is FIND_MATCH_KEYFRAMES
+	Type: string
+	Subscribed to in:
+		findFeaturesAndMatch.cpp
+		
+findDB - Name for database used in findFeatures.cpp, default is FIND_ONLY_KEYFRAMES
+	Type: string
+	Subscribed to in:
+		findFeatures.cpp
+		
+ESMFilterDB - Name for database used in ESMHomographyFilter.cpp, default is ESM_KEYFRAMES
+	Type: string
+	Subscribed to in:
+		ESMHomographyFilter.cpp
+		
+imgSaveDir - Save directory for images. Critical, won't run without this. 
+	Type: String
+	Subscribed to in:
+		findFeaturesAndMatch.cpp
+		findFeatures.cpp
+		ESMHomographyFilter.cpp
+		
